@@ -1,0 +1,52 @@
+name: Deploy to DigitalOcean
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    name: Build & Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DROPLET_HOST }}
+          username: ${{ secrets.DROPLET_USER }}
+          key: ${{ secrets.DROPLET_SSH_KEY }}
+          script_stop: true
+          script: |
+            set -e
+            APP_DIR="/home/${{ secrets.DROPLET_USER }}/app"
+
+            # Clone on first deploy, pull on subsequent ones
+            if [ ! -d "$APP_DIR/.git" ]; then
+              git clone https://github.com/${{ github.repository }}.git "$APP_DIR"
+            else
+              cd "$APP_DIR"
+              git fetch origin main
+              git reset --hard origin/main
+            fi
+
+            cd "$APP_DIR"
+
+            # Write production environment
+            cat > .env <<EOF
+            POSTGRES_USER=eventapp
+            POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+            POSTGRES_DB=eventbooking
+            EOF
+
+            # Build and deploy
+            docker compose -f docker-compose.prod.yml build --parallel
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+
+            # Reclaim disk space
+            docker image prune -f
+
+            # Verify
+            sleep 5
+            docker compose -f docker-compose.prod.yml ps
+            echo "Deployment complete!"
