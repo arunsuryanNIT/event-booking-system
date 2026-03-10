@@ -37,6 +37,7 @@ export default function MyBookings({ bookings, onCancelled }) {
       {message && (
         <p className={`msg msg-${message.type}`}>{message.text}</p>
       )}
+      <div className="table-wrap">
       <table className="table">
         <thead>
           <tr>
@@ -71,6 +72,7 @@ export default function MyBookings({ bookings, onCancelled }) {
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   )
 }
