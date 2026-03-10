@@ -250,7 +250,9 @@ Books the event to capacity, then fires N goroutines: half cancel existing booki
 go run ./cmd/loadtest --test mixed --event-id e8888888-8888-8888-8888-888888888888
 ```
 
-Expected output:
+Unlike the book and cancel tests, the mixed test output is **non-deterministic**. The cancel and booking goroutines race against each other, and the number of successful rebooks depends on OS thread scheduling and PostgreSQL lock acquisition order. One run may show 2 rebooks, another may show 4. The only guarantee is the invariant: `0 <= booked_count <= capacity`. That is what PASS/FAIL checks.
+
+Sample output (numbers will vary between runs):
 
 ```
 Event:      PostgreSQL Internals (capacity: 5, booked: 0)
@@ -265,10 +267,10 @@ Completed in 19ms
 
 Results:
   Successful cancels:   5
-  Successful rebooks:   2
+  Successful rebooks:   2       <-- varies between runs
 
 Verification:
-  Booked count after:   2
+  Booked count after:   2       <-- varies, but always within [0, 5]
   Capacity:             5
 
 PASS -- booked_count is within [0, capacity]
