@@ -4,19 +4,31 @@ An event booking system with limited capacity. Bookings never exceed capacity un
 
 **Stack:** Go (gorilla/mux, database/sql, lib/pq) | PostgreSQL 16 | React 18 (Vite) | Docker Compose
 
+**Live:** [https://event-booking.ascodelabs.me](https://event-booking.ascodelabs.me)
+
 ---
 
 ## Table of Contents
 
-1. [How It Works](#how-it-works)
-2. [Running the Application](#running-the-application)
-3. [API Reference](#api-reference)
-4. [Testing](#testing)
-5. [Database Schema and Migrations](#database-schema-and-migrations)
-6. [Concurrency and Transaction Design](#concurrency-and-transaction-design)
-7. [Project Structure](#project-structure)
-8. [Assumptions](#assumptions)
-9. [Design Decisions](#design-decisions)
+1. [Live Demo](#live-demo)
+2. [How It Works](#how-it-works)
+3. [Running the Application](#running-the-application)
+4. [API Reference](#api-reference)
+5. [Testing](#testing)
+6. [Database Schema and Migrations](#database-schema-and-migrations)
+7. [Concurrency and Transaction Design](#concurrency-and-transaction-design)
+8. [Deployment & CI/CD](#deployment--cicd)
+9. [Project Structure](#project-structure)
+10. [Assumptions](#assumptions)
+11. [Design Decisions](#design-decisions)
+
+---
+
+## Live Demo
+
+The application is deployed at **[https://event-booking.ascodelabs.me](https://event-booking.ascodelabs.me)** and updates automatically on every push to `main`.
+
+Pick a user from the dropdown, browse events, book spots, cancel bookings, and check the audit log -- all against the live production database.
 
 ---
 
@@ -436,6 +448,53 @@ When a booking or cancellation fails (sold out, already booked, not found), the 
 
 ---
 
+## Deployment & CI/CD
+
+The application runs on a DigitalOcean Droplet with automatic deployments via GitHub Actions.
+
+### Architecture
+
+```
+GitHub (push to main)
+  → GitHub Actions (SSH into Droplet)
+    → git pull latest code
+    → docker compose build
+    → docker compose up -d
+    → Live at https://event-booking.ascodelabs.me
+```
+
+### Infrastructure
+
+| Component | Details |
+|-----------|---------|
+| Server | DigitalOcean Droplet (Ubuntu 24.04, 2 GB RAM) |
+| Containers | Docker Compose: PostgreSQL 16, Go backend, Nginx + React frontend |
+| SSL | Let's Encrypt via Certbot (auto-renews) |
+| Reverse Proxy | Host Nginx handles HTTPS termination, proxies to Docker containers |
+| CI/CD | GitHub Actions with `appleboy/ssh-action` |
+
+### How it works
+
+1. A developer pushes to `main`
+2. GitHub Actions triggers the deploy workflow (`.github/workflows/deploy.yml`)
+3. The workflow SSHs into the Droplet and runs:
+   - `git fetch && git reset --hard origin/main` to pull latest code
+   - `docker compose -f docker-compose.prod.yml build --parallel` to rebuild images
+   - `docker compose -f docker-compose.prod.yml up -d` to restart containers
+4. Docker layer caching makes rebuilds fast when only source code changes
+5. `restart: always` in the compose file ensures containers auto-recover on crash or reboot
+
+### Production compose differences
+
+The production compose file (`docker-compose.prod.yml`) differs from the dev version:
+- `restart: always` on all services
+- Database password loaded from environment variable, not hardcoded
+- PostgreSQL port not exposed externally
+- Frontend mapped to port 3000 (host Nginx handles port 80/443 with SSL)
+- Logs sent to stdout (Docker handles log collection)
+
+---
+
 ## Project Structure
 
 ```
@@ -476,8 +535,10 @@ frontend/
   nginx.conf                    SPA fallback + API proxy to backend
   Dockerfile                    Multi-stage: Node build then Nginx
 
-docker-compose.yml              Three services: db, backend, frontend
+docker-compose.yml              Three services: db, backend, frontend (dev)
+docker-compose.prod.yml         Production compose with restart policies and env vars
 Makefile                        Setup, run, inspect, and cleanup commands
+.github/workflows/deploy.yml   CI/CD: auto-deploy to DigitalOcean on push to main
 ```
 
 ### Layer responsibilities
