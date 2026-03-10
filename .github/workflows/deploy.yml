@@ -16,7 +16,6 @@ jobs:
           host: ${{ secrets.DROPLET_HOST }}
           username: ${{ secrets.DROPLET_USER }}
           key: ${{ secrets.DROPLET_SSH_KEY }}
-          script_stop: true
           script: |
             set -e
             APP_DIR="/home/${{ secrets.DROPLET_USER }}/app"
