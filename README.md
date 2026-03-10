@@ -165,6 +165,126 @@ curl http://localhost:8080/api/audit
 curl "http://localhost:8080/api/audit?event_id=e1111111-1111-1111-1111-111111111111"
 ```
 
+### Load test tool
+
+A standalone Go CLI tool lives at `backend/cmd/loadtest/`. It proves that the concurrency model is correct by firing many goroutines at the same event simultaneously and verifying the results. All goroutines use the **start-gun pattern** -- they block on a shared channel and fire at the exact same moment when the channel is closed, creating maximum contention.
+
+The tool communicates with the backend over HTTP (same API the frontend uses), so it tests the full stack end-to-end: HTTP handler, service layer, repository transactions, and PostgreSQL row locking.
+
+**Prerequisites:** The backend must be running (either via `make backend` or `make docker-up`).
+
+**Three test scenarios:**
+
+**1. Booking test** -- Proves bookings never exceed capacity.
+
+Fires N goroutines that all try to book the same event at once. With a capacity-3 event and 50 goroutines, exactly 3 succeed and 47 get "sold out." The tool fetches the event afterward and verifies `booked_count == capacity`.
+
+```bash
+cd backend
+
+# Default: 50 goroutines against Go Workshop (capacity 3)
+go run ./cmd/loadtest --test book
+
+# Custom goroutines and event
+go run ./cmd/loadtest --test book --goroutines 100 --event-id e8888888-8888-8888-8888-888888888888
+```
+
+Expected output:
+
+```
+Event:      Go Workshop 2025 (capacity: 3, booked: 0, remaining: 3)
+Goroutines: 50
+Test:       book
+
+Completed in 143ms
+
+Results:
+  Successful bookings:  3
+  Sold out:             47
+  Already booked:       0
+  Errors:               0
+
+Verification:
+  Expected booked:  3
+  Actual booked:    3
+  Capacity:         3
+
+PASS -- no overbooking, no errors
+```
+
+**2. Cancel test** -- Proves cancellation returns spots atomically and count never goes negative.
+
+First books the event to full capacity sequentially, then fires all cancellations simultaneously. Verifies `booked_count` returns to 0 and never goes below zero.
+
+```bash
+go run ./cmd/loadtest --test cancel --event-id e3333333-3333-3333-3333-333333333333
+```
+
+Expected output:
+
+```
+Event:      System Design Talk (capacity: 2, booked: 0)
+Test:       cancel
+
+Booking 2 spots sequentially...
+Created 2 bookings
+
+Firing 2 concurrent cancellations...
+
+Results:
+  Successful cancels:   2
+  Not found/duplicate:  0
+  Errors:               0
+
+Verification:
+  Booked count after:   0
+
+PASS -- no negative count, no errors
+```
+
+**3. Mixed test** -- Proves the system stays consistent under simultaneous cancels and new bookings.
+
+Books the event to capacity, then fires N goroutines: half cancel existing bookings while the other half try to book freed spots. This is the hardest scenario -- cancellations free capacity that booking goroutines race to claim. The tool verifies `booked_count` stays within `[0, capacity]`.
+
+```bash
+go run ./cmd/loadtest --test mixed --event-id e8888888-8888-8888-8888-888888888888
+```
+
+Expected output:
+
+```
+Event:      PostgreSQL Internals (capacity: 5, booked: 0)
+Test:       mixed (concurrent cancel + rebook)
+
+Booking 5 spots sequentially...
+Created 5 bookings, event is now full
+
+Firing 10 goroutines: 5 cancels + 5 booking attempts...
+
+Completed in 19ms
+
+Results:
+  Successful cancels:   5
+  Successful rebooks:   2
+
+Verification:
+  Booked count after:   2
+  Capacity:             5
+
+PASS -- booked_count is within [0, capacity]
+```
+
+**Flags:**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--base-url` | `http://localhost:8080` | Backend API URL |
+| `--event-id` | `e1111111-...` (Go Workshop) | Event UUID to target |
+| `--goroutines` | `50` | Number of concurrent goroutines (book test only) |
+| `--test` | `book` | Test type: `book`, `cancel`, or `mixed` |
+
+Note: after running load tests the targeted events will have bookings. Run `make reset` (local) or `docker-compose down -v && docker-compose up -d` (Docker) to reset the database to a clean state.
+
 ### Inspecting the database
 
 ```bash
@@ -230,28 +350,72 @@ This is the most critical part of the system. The core requirement is: bookings 
 
 ### Booking: Atomic Conditional Update
 
-Three approaches were evaluated:
+Three approaches were evaluated for preventing overbooking under concurrency.
 
-1. **Pessimistic locking** (`SELECT ... FOR UPDATE` then check then insert): Correct but serializes all requests on a held row lock. Throughput bottleneck under high concurrency.
+**Approach 1: Pessimistic Locking (SELECT FOR UPDATE)**
 
-2. **Optimistic locking** (read version, check capacity, update with version check, retry on conflict): Better throughput but requires retry logic with backoff. Complexity cost is not justified for this use case.
+```sql
+BEGIN TX
+  SELECT * FROM events WHERE id = $1 FOR UPDATE  -- row lock acquired here
+  -- application checks: IF booked_count >= capacity THEN ROLLBACK
+  INSERT INTO bookings (event_id, user_id, status) VALUES ($1, $2, 'active')
+  UPDATE events SET booked_count = booked_count + 1
+COMMIT
+```
 
-3. **Atomic conditional update** (chosen): A single `UPDATE` statement that checks and mutates in one step:
+The `FOR UPDATE` clause acquires an exclusive row lock when the SELECT executes. Any other transaction trying to SELECT FOR UPDATE on the same row blocks until this transaction commits or rolls back. This is correct -- no two transactions can read and modify the row at the same time. The downside is throughput: every booking request for the same event queues behind the lock, even if the event has plenty of capacity. Under high concurrency (e.g., a popular event with 1000 users hitting "Book Now" simultaneously), the serialization becomes a bottleneck.
+
+**Approach 2: Optimistic Locking (Version/CAS)**
+
+```sql
+-- Step 1: read current state (no lock held)
+SELECT booked_count, version FROM events WHERE id = $1
+
+-- Step 2: application checks capacity
+-- Step 3: attempt update with version guard
+UPDATE events
+SET booked_count = booked_count + 1, version = version + 1
+WHERE id = $1 AND version = $old_version
+
+-- if rows_affected == 0, another transaction modified the row first -- retry
+```
+
+No lock is held during the read, so concurrent requests don't block each other. Instead, each transaction reads the current version, does its work, and attempts the update with a version check. If the version changed between the read and the write (because another transaction committed first), the update affects zero rows and the application retries. This gives better throughput than pessimistic locking when contention is low, but under heavy contention many transactions retry repeatedly, wasting CPU and database round-trips. The retry logic with exponential backoff adds complexity.
+
+**Approach 3: Atomic Conditional Update (chosen)**
 
 ```sql
 UPDATE events
 SET booked_count = booked_count + 1, updated_at = NOW()
 WHERE id = $1 AND booked_count < capacity
+-- if rows_affected == 0 -> event is full (sold out)
+-- if rows_affected == 1 -> spot reserved, proceed to insert booking
 ```
 
-If `rows_affected = 0`, the event is full. If `rows_affected = 1`, the spot was reserved. PostgreSQL acquires a row-level lock internally during the UPDATE, so two concurrent requests targeting the same row serialize automatically. There is no window for a race condition.
+This collapses the read, check, and write into a single SQL statement. PostgreSQL acquires a row-level lock internally during the UPDATE, evaluates the WHERE condition (`booked_count < capacity`), and either applies the change or affects zero rows. The lock is held only for the duration of the UPDATE itself, not across multiple statements. Two concurrent requests targeting the same row serialize at the row lock automatically, but the lock window is minimal compared to Approach 1.
+
+The Go code does not perform any capacity check. It executes the UPDATE, reads `rows_affected`, and interprets the result:
+
+```go
+rowsAffected, _ := result.RowsAffected()
+if rowsAffected == 0 {
+    return nil, ErrSoldOut  // Postgres told us the event is full
+}
+// rowsAffected == 1: spot reserved, proceed to insert booking
+```
+
+There is no separate SELECT, no version field, no retry loop. The entire concurrency problem is solved by one SQL statement.
+
+**Why Approach 3 was chosen:** It is the simplest correct solution for this use case. Approach 1 is correct but slower under contention. Approach 2 is faster under low contention but adds retry complexity. Approach 3 is both fast and simple -- the only trade-off is that complex pre-update validation (e.g., checking multiple tables before deciding) would require restructuring. For a single capacity check, it is the right tool.
+
+### Booking Transaction
 
 The full booking transaction wraps three operations atomically:
-1. Increment `booked_count` (the atomic update above)
+1. Increment `booked_count` (the atomic conditional update above)
 2. Insert the booking row
 3. Insert the success audit log
 
-If any step fails, the entire transaction rolls back. The database also enforces a CHECK constraint (`booked_count <= capacity`) as a safety net -- even if application code has a bug, PostgreSQL will reject any transaction that would cause overbooking.
+If any step fails, the entire transaction rolls back. The database also enforces a CHECK constraint (`booked_count <= capacity`) as an additional safety net at the database level.
 
 A partial unique index on `bookings (event_id, user_id) WHERE status = 'active'` prevents the same user from booking the same event twice at the database level. The application detects this by checking for PostgreSQL error code `23505` (unique violation).
 
@@ -328,7 +492,7 @@ Makefile                        Setup, run, inspect, and cleanup commands
 
 - **No event management.** Events are pre-seeded via migration. There is no admin UI to create, update, or delete events. This is out of scope.
 
-- **No pagination.** List endpoints return all records. The dataset is small (4 users, 5 events). In production, cursor-based pagination would be added.
+- **No pagination.** List endpoints return all records. The dataset is small (9 users, 9 events). In production, cursor-based pagination would be added.
 
 - **Timestamps are stored in UTC** (`TIMESTAMPTZ`) and displayed in the user's local timezone by the frontend.
 
