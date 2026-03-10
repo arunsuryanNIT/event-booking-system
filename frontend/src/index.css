@@ -1,0 +1,373 @@
+/* ===== Reset & Base ===== */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  line-height: 1.6;
+  color: #1a1a2e;
+  background: #f0f2f5;
+}
+
+a {
+  color: #4361ee;
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+/* ===== Layout ===== */
+.container {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px 16px;
+}
+
+/* ===== Navbar ===== */
+.navbar {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 12px 24px;
+  background: #1a1a2e;
+  color: #fff;
+}
+.navbar-brand {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #fff;
+  margin-right: auto;
+}
+.navbar-brand:hover {
+  text-decoration: none;
+}
+.navbar-links {
+  display: flex;
+  gap: 16px;
+}
+.navbar-links a {
+  color: #ccc;
+  font-size: 0.9rem;
+}
+.navbar-links a:hover {
+  color: #fff;
+  text-decoration: none;
+}
+.user-picker {
+  padding: 6px 10px;
+  border: 1px solid #555;
+  border-radius: 4px;
+  background: #2a2a4a;
+  color: #fff;
+  font-size: 0.9rem;
+}
+
+/* ===== Event Grid ===== */
+.event-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+/* ===== Event Card ===== */
+.event-card {
+  background: #fff;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.event-card .capacity-bar {
+  margin-top: auto;
+}
+.event-card h3 {
+  font-size: 1.1rem;
+}
+.event-meta {
+  font-size: 0.85rem;
+  color: #666;
+}
+.event-desc {
+  font-size: 0.9rem;
+  color: #444;
+}
+
+/* ===== Capacity Bar ===== */
+.capacity-bar {
+  height: 6px;
+  background: #e0e0e0;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.capacity-fill {
+  height: 100%;
+  background: #4361ee;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.capacity-text {
+  font-size: 0.85rem;
+  color: #666;
+}
+
+/* ===== Event Detail ===== */
+.event-detail {
+  background: #fff;
+  border-radius: 8px;
+  padding: 28px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+.event-stats {
+  display: flex;
+  gap: 24px;
+  font-size: 0.95rem;
+  color: #444;
+}
+.event-stats span {
+  background: #f0f2f5;
+  padding: 6px 12px;
+  border-radius: 4px;
+}
+.back-link {
+  font-size: 0.9rem;
+  display: inline-block;
+  margin-bottom: 8px;
+}
+
+/* ===== Buttons ===== */
+.btn {
+  display: inline-block;
+  padding: 8px 18px;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+.btn:hover {
+  opacity: 0.85;
+  text-decoration: none;
+}
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.btn-primary {
+  background: #4361ee;
+  color: #fff;
+}
+.btn-outline {
+  background: transparent;
+  border: 1px solid #4361ee;
+  color: #4361ee;
+}
+.btn-danger {
+  background: #e63946;
+  color: #fff;
+}
+.btn-disabled {
+  background: #ccc;
+  color: #666;
+  cursor: not-allowed;
+}
+.btn-sm {
+  padding: 4px 12px;
+  font-size: 0.8rem;
+}
+
+/* ===== Messages ===== */
+.msg {
+  margin-top: 8px;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 0.9rem;
+}
+.msg-success {
+  background: #d4edda;
+  color: #155724;
+}
+.msg-error {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+/* ===== Tables ===== */
+.table-wrap {
+  width: 110%;
+  margin-left: -5%;
+}
+@media (max-width: 768px) {
+  .table-wrap {
+    width: 100%;
+    margin-left: 0;
+    overflow-x: auto;
+  }
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  margin-top: 12px;
+}
+.table th,
+.table td {
+  padding: 10px 14px;
+  text-align: left;
+  font-size: 0.9rem;
+  border-bottom: 1px solid #eee;
+  white-space: nowrap;
+}
+.table th {
+  background: #f8f9fa;
+  font-weight: 600;
+  color: #444;
+}
+.table tr:last-child td {
+  border-bottom: none;
+}
+
+/* ===== Badges ===== */
+.badge {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.badge-active {
+  background: #d4edda;
+  color: #155724;
+}
+.badge-cancelled {
+  background: #f8d7da;
+  color: #721c24;
+}
+.badge-book {
+  background: #cce5ff;
+  color: #004085;
+}
+.badge-cancel {
+  background: #fff3cd;
+  color: #856404;
+}
+
+/* ===== Audit Outcomes ===== */
+.outcome-success {
+  color: #28a745;
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+.outcome-failure {
+  color: #dc3545;
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+/* ===== Filters ===== */
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.filters select {
+  padding: 6px 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  background: #fff;
+}
+
+/* ===== Confirmation Popup ===== */
+.popup-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: overlay-in 0.2s ease;
+}
+.popup {
+  background: #fff;
+  border-radius: 12px;
+  padding: 32px 40px;
+  text-align: center;
+  position: relative;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+  animation: popup-in 0.3s ease;
+  max-width: 360px;
+  width: 90%;
+}
+.popup-close {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  cursor: pointer;
+  color: #888;
+  line-height: 1;
+}
+.popup-close:hover {
+  color: #333;
+}
+.popup-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #28a745;
+  color: #fff;
+  font-size: 1.5rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+}
+.popup h3 {
+  margin-bottom: 8px;
+  font-size: 1.2rem;
+}
+.popup p {
+  color: #666;
+  font-size: 0.95rem;
+}
+@keyframes overlay-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes popup-in {
+  from { opacity: 0; transform: scale(0.9); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+/* ===== Misc ===== */
+h2 {
+  margin-bottom: 16px;
+  font-size: 1.4rem;
+}
+.empty-state {
+  color: #888;
+  font-style: italic;
+  padding: 20px 0;
+}
