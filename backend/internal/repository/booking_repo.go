@@ -170,7 +170,7 @@ func (r *BookingRepo) GetUserBookings(ctx context.Context, userID uuid.UUID, sta
 	var bookings []model.Booking
 	for rows.Next() {
 		var b model.Booking
-		if err := rows.Scan(
+		if err = rows.Scan(
 			&b.ID, &b.EventID, &b.UserID, &b.Status,
 			&b.CreatedAt, &b.UpdatedAt, &b.EventTitle,
 		); err != nil {
