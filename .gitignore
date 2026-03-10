@@ -1,0 +1,26 @@
+# Binaries
+backend/server
+*.exe
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+
+# Node (frontend — added later)
+node_modules/
+dist/
+
+# Logs
+*.log
+
+# Docker
+pgdata/
